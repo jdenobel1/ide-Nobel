@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jupyter to Python Converter</title>
+    <!-- Include Bootstrap for styling (optional) -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        #output {
+            white-space: pre-wrap;
+            font-family: monospace;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<input type="file" id="fileInput" accept=".ipynb">
+<button onclick="convertToPython()">Convert to .py</button>
+
+<div id="output"></div>
+
+<script>
+function convertToPython() {
+    const fileInput = document.getElementById('fileInput');
+    const outputDiv = document.getElementById('output');
+
+    // Check if a file is selected
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            try {
+                const notebookContent = JSON.parse(e.target.result);
+
+                // Extract Python code from the "source" section of all cells
+                if (notebookContent.cells && notebookContent.cells.length > 0) {
+                    let pythonCode = '';
+                    notebookContent.cells.forEach((cell) => {
+                        if (cell.cell_type === 'code' && cell.source) {
+                            pythonCode += cell.source.join('') + '\n\n';
+                        }
+                    });
+
+                    // Display the extracted Python code
+                    outputDiv.textContent = pythonCode;
+
+                    // You can also trigger a file download
+                    downloadFile('output.py', pythonCode);
+                } else {
+                    outputDiv.textContent = "No code cells found in the notebook.";
+                }
+            } catch (error) {
+                outputDiv.textContent = "Error parsing the notebook file. Please make sure it is a valid .ipynb file.";
+            }
+        };
+
+        reader.readAsText(file);
+    } else {
+        outputDiv.textContent = "Please select a .ipynb file.";
+    }
+}
+
+function downloadFile(filename, content) {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = filename;
+
+    // Trigger a click on the link to start the download
+    link.click();
+
+    // Clean up
+    window.URL.revokeObjectURL(link.href);
+}
+</script>
+
+</body>
+</html>

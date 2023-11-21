@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        #yourcode {
+            width: 80%;
+            height: 300px;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Adjusted button layout */
+        button {
+            margin-right: 5px;
+        }
+    </style>
+    <script src="skulpt.min.js" type="text/javascript"></script>
+    <script src="skulpt-stdlib.js" type="text/javascript"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body onload="loadCodeFromURL()">
+
+    <script type="text/javascript">
+        // output functions are configurable. This one appends text to a pre element.
+        function outf(text) {
+            var outputDiv = document.getElementById("output");
+            // Display the printed output in a popup dialog box
+            alert(text);
+            // Append the output to the outputDiv as well
+            outputDiv.innerHTML += text;
+        }
+
+        // function to display errors
+        function errf(text) {
+            var errorOutputDiv = document.getElementById("error-output");
+            if (text) {
+                // If there's an error, display the "Error:" heading and the error text
+                errorOutputDiv.innerHTML = '<div>Error:</div>' + text;
+            } else {
+                // If there's no error, hide the "Error:" heading
+                errorOutputDiv.innerHTML = '';
+            }
+        }
+
+        function builtinRead(x) {
+            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined)
+                throw "File not found: '" + x + "'";
+            return Sk.builtinFiles["files"][x];
+        }
+
+        // Here's everything you need to run a python program in skulpt
+        // grab the code from your textarea
+        // get a reference to your pre element for output
+        // configure the output function
+        // call Sk.importMainWithBody()
+        function runit() {
+            var prog = document.getElementById("yourcode").value;
+            var outputDiv = document.getElementById("output");
+            var errorOutputDiv = document.getElementById("error-output");
+
+            outputDiv.innerHTML = ''; // Clear previous output
+            errorOutputDiv.innerHTML = ''; // Clear previous errors
+
+            Sk.pre = "output";
+            Sk.configure({ output: outf, read: builtinRead, error: errf });
+            (Sk.TurtleGraphics || (Sk.TurtleGraphics = {})).target = 'mycanvas';
+            var myPromise = Sk.misceval.asyncToPromise(function () {
+                return Sk.importMainWithBody("<stdin>", false, prog, true);
+            });
+            myPromise.then(function (mod) {
+                    console.log('success');
+                },
+                function (err) {
+                    console.log(err.toString());
+                    errf(err.toString()); // Display the error
+                });
+        }
+
+        function downloadCode() {
+            var code = document.getElementById("yourcode").value;
+            var fileName = prompt("Enter file name:", "yourcode.py");
+            if (fileName) {
+                var blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+                saveAs(blob, fileName);
+            }
+        }
+
+        // saveAs function for cross-browser compatibility
+        function saveAs(blob, filename) {
+            var link = document.createElement("a");
+            link.href = window.URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+
+        function exportToPDF() {
+            var code = document.getElementById("yourcode").value;
+            var output = document.getElementById("output").innerHTML;
+            var errorOutput = document.getElementById("error-output").innerHTML;
+            var canvas = document.getElementById("mycanvas");
+
+            // Use html2canvas to capture the canvas as an image
+            html2canvas(canvas).then(function (canvasImage) {
+                var content = `
+                    <h3>Code:</h3>
+                    <pre>${code}</pre>
+                    <h3>Output:</h3>
+                    <pre>${output}</pre>
+                    <h3>Error:</h3>
+                    <pre>${errorOutput}</pre>
+                    <h3>Drawing</h3>
+                    <img id="canvasImage" style="width:100%;height:auto;" />
+                `;
+
+                var element = document.getElementById("export-content");
+                element.innerHTML = content;
+
+                // Set the source of the img element with the captured canvas image
+                document.getElementById("canvasImage").src = canvasImage.toDataURL("image/png");
+
+                // Use html2pdf to generate the PDF
+                html2pdf(element, {
+                    margin: 10,
+                    filename: "output.pdf",
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).then(function () {
+                    console.log('PDF Exported Successfully');
+                }).catch(function (error) {
+                    console.error('Error exporting PDF:', error);
+                });
+            });
+        }
+
+        function saveAsTXT() {
+            var code = document.getElementById("yourcode").value;
+
+            var blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, "yourcode.txt");
+        }
+
+        function exportToIPythonNotebook() {
+            var code = document.getElementById("yourcode").value;
+            var fileName = prompt("Enter file name:", "yourcode.ipynb");
+            if (fileName) {
+                // Create a valid IPython Notebook file using JSZip
+                var zip = new JSZip();
+                var notebookContent = {
+                    "nbformat": 4,
+                    "nbformat_minor": 4,
+                    "metadata": {
+                        "kernelspec": {
+                            "name": "python",
+                            "display_name": "Python (Pyodide)",
+                            "language": "python"
+                        },
+                        "language_info": {
+                            "codemirror_mode": {
+                                "name": "python",
+                                "version": 3
+                            },
+                            "file_extension": ".py",
+                            "mimetype": "text/x-python",
+                            "name": "python",
+                            "nbconvert_exporter": "python",
+                            "pygments_lexer": "ipython3",
+                            "version": "3.8"
+                        }
+                    },
+
+                    cells: [
+                        {
+                            cell_type: 'code',
+                            execution_count: 1,
+                            metadata: {},
+                            outputs: [],
+                            source: code.split('\n').map(line => line + '\n') // Add newline character
+                        }
+                    ],
+                    metadata: {
+                        kernelspec: {
+                            display_name: 'Python 3',
+                            language: 'python',
+                            name: 'python3'
+                        },
+                        language_info: {
+                            codemirror_mode: {
+                                name: 'ipython',
+                                version: 3
+                            },
+                            file_extension: '.py',
+                            mimetype: 'text/x-python',
+                            name: 'python',
+                            nbconvert_exporter: 'python',
+                            pygments_lexer: 'ipython3',
+                            version: '3.8.5'
+                        }
+                    }
+                };
+
+                // Use the Blob constructor to create a Blob with explicit options
+                var blob = new Blob([JSON.stringify(notebookContent, null, 2)], { type: 'application/json;charset=utf-8' });
+
+                // Use saveAs from FileSaver.js to save the Blob as a file
+                saveAs(blob, fileName);
+            }
+        }
+
+        function showUploadDirections() {
+            // Open the new HTML file with upload instructions
+            window.open("upload_ipynb.html", "_blank");
+        }
+        
+        function ipynb2py() {
+            window.open("ipynb2py.html","_blank")
+        }
+
+        function shareCode() {
+            var code = encodeURIComponent(document.getElementById("yourcode").value);
+            var shareURL = window.location.origin + window.location.pathname + "?code=" + code;
+            prompt("Share this URL:", shareURL);
+        }
+
+        // Function to load code from URL parameters
+        function loadCodeFromURL() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var codeParam = urlParams.get('code');
+            if (codeParam) {
+                document.getElementById("yourcode").value = decodeURIComponent(codeParam);
+                runit(); // Automatically run the code when loaded from the URL
+            }
+        }
+    </script>
+
+    <h3>Python ide-Nobel</h3>
+    <form>
+        <textarea id="yourcode" cols="40" rows="15" spellcheck="false">
+#this is just a sample of a simple online Python IDE | Please delete sample and code your own, TRY IT!
+"""
+The import turtle code snippets -- illustrate that a drawing canvas can be used.
+The export code including the turtle drawing canvas will not work if saved as .ipynb -
+ - and open with Colab or Jupyter Retro
+The export code as .py file will execute the turtle drawing canvas
+"""
+
+import turtle
+t = turtle.Turtle()
+t.forward(100)
+
+name = input("Enter your name: ")
+print("Hello", name)
+
+
+        </textarea><br />
+        <button type="button" onclick="runit()">Run</button>
+        <button type="button" onclick="shareCode()">Share Code</button>
+        <button type="button" onclick="saveAsTXT()">Save as TXT</button>
+        <button type="button" onclick="exportToPDF()">Export as PDF</button>
+        <button type="button" onclick="exportToIPythonNotebook()">Export as IPython Notebook</button>
+        <button type="button" onclick="downloadCode()">Export as .py</button>
+        <button type="button" onclick="showUploadDirections()">Directions to upload .ipynb</button>
+        <button type="button" onclick="ipynb2py()">Convert .ipynb to .py</button>
+    </form>
+    <pre id="output"></pre>
+    <!-- <div>Error:</div> -->
+<pre id="error-output" style="color: red;"></pre>
+
+    <!-- If you want turtle graphics include a canvas -->
+    <div id="mycanvas"></div>
+    <div id="export-content"></div>
+
+</body>
+
+</html>
